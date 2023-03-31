@@ -1,0 +1,348 @@
+<?php
+   use Dompdf\Dompdf;
+   // instantiate and use the dompdf class
+	$dompdf = new Dompdf();
+	$dompdf->loadHtml('hello world');
+
+	// (Optional) Setup the paper size and orientation
+	$dompdf->setPaper('A4', 'landscape');
+
+	// Render the HTML as PDF
+	$dompdf->render();
+
+	// Output the generated PDF to Browser
+	$dompdf->stream();
+   if(isset($_POST["generate-salary"])){
+	$eid = $_POST['employ_id'];
+	$sql = "SELECT * FROM employee WHERE id = $eid";
+	$employee_current = mysqli_query($conn, $sql);
+	$e_row = mysqli_fetch_assoc($employee_current);
+ 
+	$time    = time();
+	$numMonth = date('m', $time) ;
+	$numYear = date('Y', $time);
+	$numYear = $numMonth == 1 ? intval( $numYear ) - 1 : $numYear;
+	$numMonth = $numMonth == 1 ? 12 : intval( $numMonth ) - 1;
+	$daysInMonth = cal_days_in_month(0, $numMonth, $numYear);
+	//current month first day
+	$start_month_date = date('Y-m-d',strtotime( $numYear.'-'.$numMonth.'-01' ));
+	//current month last day
+	$end_month_date = date('Y-m-d',strtotime( $numYear.'-'.$numMonth.'-'.$daysInMonth ));
+	$sql = "SELECT * FROM leave_mngmnt  WHERE `deleted_date` IS NULL AND `employ_name` = '".$eid."'  AND `leave_date` BETWEEN '".$start_month_date."' AND  '".$end_month_date."'";
+	$leaves = mysqli_query($conn, $sql);
+	$leaves_array = [];
+	$leave = $half_day = $un_leave = $un_halfday = $overtime = array();
+	$overtime_salary = $leave_deduction = 0;
+	if (mysqli_num_rows($leaves) > 0) {
+	   while($leaves_rows = mysqli_fetch_assoc($leaves)) {
+		   	if( 'Leave' == $leaves_rows['leave_type'] ){
+				$leave[] = $leaves_rows['leave_date'];
+		   	}
+		  	 if( 'Half Leave' == $leaves_rows['leave_type'] ){
+				$half_day[] = $leaves_rows['leave_date'];
+		   	} 
+		   	if( 'Unapproved Leave' == $leaves_rows['leave_type'] ){
+				$un_leave[] = $leaves_rows['leave_date'];
+			}
+			if( 'Unapproved Half day' == $leaves_rows['leave_type'] ){
+				$un_halfday[] = $leaves_rows['leave_date'];
+			} 
+			if( 'Overtime' == $leaves_rows['leave_type'] ){
+				$overtime[] = $leaves_rows['leave_date'];
+			}   
+	   }
+	}
+
+	$total_leave = count( $leave ) + ( count( $half_day ) / 2 ) + ( count( $un_leave ) * 2 ) + count( $un_halfday );
+	$avalaible_leave = $e_row['earn_leave'] + $e_row['casual_leave'];
+	if( $total_leave > $avalaible_leave ){
+		$leave_deduction = ( $e_row['basic_salary'] / 30 ) * ( $total_leave - $avalaible_leave ); 
+	}
+	$pay_number = $pay_amount = $e_row['basic_salary'] - $leave_deduction;
+	$no = floor($pay_number);
+	$point = round($pay_number - $no, 2) * 100;
+	$hundred = null;
+	$digits_1 = strlen($no);
+	$i = 0;
+	$str = array();
+	$words = array('0' => '', '1' => 'one', '2' => 'two',
+	'3' => 'three', '4' => 'four', '5' => 'five', '6' => 'six',
+	'7' => 'seven', '8' => 'eight', '9' => 'nine',
+	'10' => 'ten', '11' => 'eleven', '12' => 'twelve',
+	'13' => 'thirteen', '14' => 'fourteen',
+	'15' => 'fifteen', '16' => 'sixteen', '17' => 'seventeen',
+	'18' => 'eighteen', '19' =>'nineteen', '20' => 'twenty',
+	'30' => 'thirty', '40' => 'forty', '50' => 'fifty',
+	'60' => 'sixty', '70' => 'seventy',
+	'80' => 'eighty', '90' => 'ninety');
+	$digits = array('', 'hundred', 'thousand', 'lakh', 'crore');
+	while ($i < $digits_1) {
+	$divider = ($i == 2) ? 10 : 100;
+	$pay_number = floor($no % $divider);
+	$no = floor($no / $divider);
+	$i += ($divider == 10) ? 1 : 2;
+	if ($pay_number) {
+		$plural = (($counter = count($str)) && $pay_number > 9) ? 's' : null;
+		$hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
+		$str [] = ($pay_number < 21) ? $words[$pay_number] .
+			" " . $digits[$counter] . $plural . " " . $hundred
+			:
+			$words[floor($pay_number / 10) * 10]
+			. " " . $words[$pay_number % 10] . " "
+			. $digits[$counter] . $plural . " " . $hundred;
+	} else $str[] = null;
+	}
+	$str = array_reverse($str);
+	$rupees = implode('', $str);
+	$paise = ($point) ?
+	"." . $words[$point / 10] . " " . 
+			$words[$point = $point % 10] : '';
+	$amount_string = $rupees . "Rupees  ";
+	$amount_string .= $paise > 0 ? $paise . " Paise" : "";
+    ?>
+   
+ <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;table-layout:fixed;font-family:Helvetica;font-size:12px;font-style:normal;font-variant-caps:normal;font-weight:normal;letter-spacing:normal;text-align:center;text-indent:0px;text-transform:none;white-space:normal;word-spacing:0px;text-decoration:none;min-width:100%">
+	<tbody>
+		<tr>
+			<td>
+				<div style="background: #fff">
+					<table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#fff" style="border-collapse:collapse;table-layout:auto;">
+						<tbody>
+							<tr>
+								<td>
+									<table  width="1000" align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:1000px;box-shadow: 0px 0px 8px 0px rgb(0 0 0 / 12%);">
+										<tbody>
+											<tr>
+												<td valign="top">
+													<table width="100%" align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed">
+														<tbody>
+															<tr>
+																<td valign="top">
+                                                                   <div style="display: flex;">
+                                                                   	 <div style="width: 70%; padding: 40px;">
+                                                                   	 	<table width="100%" align="center" border="0" cellpadding="0" >
+                                                                   	 		<tr>
+                                                                   	 			<th>
+                                                                   	 				<h1 style="font-size: 26px; margin: 0 0 15px; text-align: left;" mc:edit="heading-1">Salary statement for the month of May-2022</h1>
+                                                                   	 			</th>
+                                                                   	 		</tr>
+                                                                   	 	</table>
+                                                                   	 	<table style="margin-top: 15px;" mc:edit="table-1">
+                                                                   	 		<thead>
+                                                                   	 			<tr>
+                                                                   	 				<th>
+                                                                   	 				   <p style="text-align: left;"><?php echo $start_month_date;?></p>
+                                                                   	 			    </th>
+                                                                   	 			</tr>
+                                                                   	 		</thead>
+                                                                   	 		<tbody style="padding-top: 15px;display: block;">
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 123px;">Emp Name</td>
+                                                                   	 				<td style="width: 57px;">:</td>
+                                                                   	 				<td><?php echo $e_row['name']; ?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 123px;">Designation</td>
+                                                                   	 				<td style="width: 57px;">:</td>
+                                                                   	 				<td> <?php echo $e_row['designation'];?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 123px;">Department </td>
+                                                                   	 				<td style="width: 57px;">:</td>
+                                                                   	 				<td><?php echo $e_row['department'];?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 123px;">Email Id</td>
+                                                                   	 				<td style="width: 57px;">:</td>
+                                                                   	 				<td><?php echo $e_row['email_id'];?></td>
+                                                                   	 			</tr>
+																					<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 123px;">PAN</td>
+                                                                   	 				<td style="width: 57px;">:</td>
+                                                                   	 				<td><?php echo $e_row['pan_number'];?></td>
+                                                                   	 			</tr>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 	<table style="margin-top: 15px; width: 100%;" mc:edit="table-2">
+                                                                   	 		<thead style="background: #808080; padding: 6px 0;display: block; color: #fff; ">
+                                                                   	 			<tr>
+                                                                   	 				<th>
+                                                                   	 				   <p style="text-align: left;">Earning</p>
+                                                                   	 			    </th>
+                                                                   	 			</tr>
+                                                                   	 		</thead>
+                                                                   	 		<tbody style="padding-top: 15px;display: block;">
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Period</td>
+                                                                   	 				<td><?php echo $start_month_date; ?> to <?php echo $end_month_date; ?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Basic </td>
+                                                                   	 				<td><?php echo number_format((float) $e_row['basic_salary'], 2, '.', '');?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Overtime</td>
+                                                                   	 				<td><?php echo number_format((float) $overtime_salary, 2, '.', '');?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">One and Half day</td>
+                                                                   	 				<td><?php echo number_format((float) $leave_deduction, 2, '.', '');?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Incentive </td>
+                                                                   	 				<td>0</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">TA</td>
+                                                                   	 				<td>NA</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">DA</td> 
+                                                                   	 				<td>NA</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">HRA</td>
+                                                                   	 				<td>NA</td>
+                                                                   	 			</tr>
+
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 	<table style="margin-top: 15px; width: 100%;" mc:edit="table-2">
+                                                                   	 		<thead style="background: #808080; padding: 6px 0;display: block; color: #fff; ">
+                                                                   	 			<tr>
+                                                                   	 				<th>
+                                                                   	 				   <p style="text-align: left;">Adjustments</p>
+                                                                   	 			    </th>
+                                                                   	 			</tr>
+                                                                   	 		</thead>
+                                                                   	 		<tbody style="padding-top: 15px;display: block;">
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">EL</td>
+                                                                   	 				<td><?php echo $e_row['earn_leave'];?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">CL</td>
+                                                                   	 				<td><?php echo $e_row['casual_leave'];?></td>
+                                                                   	 			</tr>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+																		<table style="margin-top: 15px; width: 100%;" mc:edit="table-4">
+                                                                   	 		<thead style="background: #808080; padding: 6px 0;display: block; color: #fff; ">
+                                                                   	 			<tr>
+                                                                   	 				<th>
+                                                                   	 				   <p style="text-align: left;">Deductions</p>
+                                                                   	 			    </th>
+                                                                   	 			</tr>
+                                                                   	 		</thead>
+                                                                   	 		<tbody style="padding-top: 15px;display: block;">
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Leaves</td>
+                                                                   	 				<td>
+																							<?php 
+																								echo count($leave)."  ";
+																								foreach($leave as $l_date){
+																									echo date('d/m', strtotime($l_date)).",";
+																								}
+																							?>
+																					</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Half days</td>
+                                                                   	 				<td>
+																						<?php 
+																							echo count($half_day)."  ";
+																							foreach($half_day as $hl_date){
+																								echo date('d/m' ,strtotime($hl_date)).",";
+																							}
+																						?>
+																					</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Unapproved Leaves</td>
+                                                                   	 				<td>
+																						<?php 
+																							echo count($un_halfday)/2+count($un_leave)."  ";
+																							foreach($un_halfday as $uhl_date){
+																								echo date('d/m' ,strtotime($uhl_date)).",";
+																							}
+																							foreach($un_leave as $ul_date){
+																								echo $ul_date.",";
+																							}
+																						?>
+																					</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Advance</td>
+                                                                   	 				<td>0</td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Total deductions</td>
+                                                                   	 				<td><?php echo number_format((float)$leave_deduction, 2, '.', ''); ?></td>
+                                                                   	 			</tr>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 	<table style="margin-top: 15px; width: 100%;" mc:edit="table-5">
+                                                                   	 		<thead style="background: #808080; padding: 6px 0;display: block; color: #fff; ">
+                                                                   	 			<tr> 
+                                                                   	 				<th>
+                                                                   	 				   <p style="text-align: left;">Net Salary : INR <?php echo number_format((float)$pay_amount, 2, '.', '');?></p>
+                                                                   	 			    </th>
+                                                                   	 			</tr>
+                                                                   	 		</thead>
+                                                                   	 		<tbody style="padding-top: 15px;display: block;">
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td style="width: 190px;">Net Payable</td>
+                                                                   	 				<td style="background: #ff0"><?php echo number_format((float)$pay_amount, 2, '.', '');?></td>
+                                                                   	 			</tr>
+                                                                   	 			<tr style="margin-bottom: 7px; display: block;">
+                                                                   	 				<td colspan="2" style="text-transform: uppercase;">
+																						<?php
+																						echo $amount_string; 
+																						?>
+																					</td>
+                                                                   	 			</tr>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 	<table width="100%" align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed; margin-top: 20px;">
+                                                                   	 		<tbody>
+                                                                   	 			<tr>
+                                                                   	 				<td>
+                                                                   	 					<p style="font-size: 16px;
+                                                                   	 					" mc:edite="text-content-1">Please note that this is a system generated statement and does not require signature.</p>
+                                                                   	 					<p style="font-size: 16px; line-height: 27px;
+                                                                   	 					" mc:edite="text-content-2">This document is confidential. It is intended solely for the addressees. If you are not an intended recipient, any use, copy or diffusion, even partial of this message
+ is prohibited. Please delete it and notify the sender immediately. Since the integrity of this message cannot be guaranteed on the Internet, ABS Group of Companies cannot
+ therefore be considered liable for its content</p>
+                                                                   	 				</td>
+                                                                   	 			</tr>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 </div>
+                                                                   	 <div style="width: 30%; padding: 0px 17px;; border-left: 4px solid #b33292; background: #e6e7e9">
+                                                                   	 	<table width="100%" align="center" border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed; margin-top: 20px;">
+                                                                   	 		<tbody>
+                                                                   	 			<td valign="top">
+                                                                   	 				<img src="contect-img.jpg" mc:edite="left-img">
+                                                                   	 			</td>
+                                                                   	 		</tbody>
+                                                                   	 	</table>
+                                                                   	 </div>
+                                                                   </div>
+																</td>
+															</tr>
+														</tbody>
+													</table>
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</td>
+		</tr>
+	</tbody>
+</table>
+<?php }?>
